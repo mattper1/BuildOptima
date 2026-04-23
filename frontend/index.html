@@ -613,6 +613,7 @@ function DonutChart({ size = 180, alloc = ALLOC, totalLabel = '$1,512' }) {
 function OptimizerPage({ onNavigate, auth, user, onLogout }) {
   const isMobile = useIsMobile();
   const [budget, setBudget] = React.useState(1500);
+  const [rawBudget, setRawBudget] = React.useState('1500');
   const [useCase, setUseCase] = React.useState('Gaming');
   const [prefs, setPrefs] = React.useState({ future: true, gpu: false, quiet: false });
   const [result, setResult] = React.useState(null);
@@ -637,7 +638,11 @@ function OptimizerPage({ onNavigate, auth, user, onLogout }) {
           prefer_quiet_cooling: prefs.quiet,
         }),
       });
-      setResult(data);
+      if (!data || !Array.isArray(data.components) || data.components.length === 0) {
+        setOptError('No parts found for this configuration. Try increasing your budget or adjusting your preferences.');
+      } else {
+        setResult(data);
+      }
     } catch (err) {
       setOptError(err.message);
     } finally {
@@ -728,7 +733,9 @@ function OptimizerPage({ onNavigate, auth, user, onLogout }) {
           onClick={e => {
             const r = e.currentTarget.getBoundingClientRect();
             const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-            setBudget(Math.round((300 + pct * 4700) / 100) * 100);
+            const v = Math.round((300 + pct * 4700) / 100) * 100;
+            setBudget(v);
+            setRawBudget(String(v));
           }}>
           <div style={{ position: 'absolute', inset: 0, width: `${budgetPct}%`, background: `linear-gradient(90deg,${BO.primary},#8b5cf6)`, borderRadius: 3 }} />
           <div style={{ position: 'absolute', top: -6, left: `calc(${budgetPct}% - 9px)`, width: 18, height: 18, borderRadius: '50%', background: BO.text, border: `3px solid ${BO.primary}`, boxShadow: '0 2px 8px rgba(99,102,241,0.5)', cursor: 'grab' }} />
@@ -738,8 +745,13 @@ function OptimizerPage({ onNavigate, auth, user, onLogout }) {
         </div>
         <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: BO.textDim, fontSize: 14, zIndex: 1 }}>$</span>
-          <input className="bo-input" type="number" value={budget} min={300} max={5000}
-            onChange={e => setBudget(Math.max(300, Math.min(5000, Number(e.target.value) || 300)))}
+          <input className="bo-input" type="number" value={rawBudget} min={300} max={5000}
+            onChange={e => setRawBudget(e.target.value)}
+            onBlur={e => {
+              const v = Math.max(300, Math.min(5000, Number(e.target.value) || 300));
+              setBudget(v);
+              setRawBudget(String(v));
+            }}
             style={{ paddingLeft: 24 }} aria-label="Budget amount" />
         </div>
       </div>
@@ -915,7 +927,7 @@ function SavedPage({ onNavigate, auth, user }) {
     setFetchLoading(true);
     setFetchError('');
     apiFetch('/builds')
-      .then(data => setBuilds(data))
+      .then(data => setBuilds(Array.isArray(data) ? data : []))
       .catch(err => setFetchError(err.message))
       .finally(() => setFetchLoading(false));
   }, [auth]);
@@ -1022,16 +1034,24 @@ function SavedPage({ onNavigate, auth, user }) {
               </div>
             ))}
           </div>
+        ) : builds.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '80px 20px 60px' }}>
+            <div style={{ width: 72, height: 72, borderRadius: 18, background: BO.primarySoft, border: `1px solid rgba(99,102,241,0.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+              <Icon name="save" size={32} color={BO.primary} />
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, letterSpacing: -0.3 }}>No saved builds yet</div>
+            <div style={{ fontSize: 14, color: BO.textMuted, maxWidth: 320, margin: '0 auto 24px', lineHeight: 1.55 }}>
+              Run the optimizer to generate a personalized build for your budget, then save it here to keep track of your options.
+            </div>
+            <button className="bo-btn primary" style={{ padding: '10px 20px' }} onClick={() => onNavigate('optimizer')}>
+              <Icon name="zap" size={14} color="white" strokeWidth={0} /> Go to Optimizer
+            </button>
+          </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: BO.textDim }}>
             <Icon name="search" size={40} color={BO.border} />
-            <div style={{ marginTop: 12, fontSize: 15 }}>
-              {builds.length === 0 ? "No saved builds yet — optimize a build and save it!" : "No builds match your search"}
-            </div>
-            {builds.length > 0
-              ? <button className="bo-btn ghost sm" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setFilter('All'); }}>Clear filters</button>
-              : <button className="bo-btn primary sm" style={{ marginTop: 16 }} onClick={() => onNavigate('optimizer')}>Build Your PC</button>
-            }
+            <div style={{ marginTop: 12, fontSize: 15 }}>No builds match your search</div>
+            <button className="bo-btn ghost sm" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setFilter('All'); }}>Clear filters</button>
           </div>
         ))}
 
@@ -1057,42 +1077,106 @@ function SavedPage({ onNavigate, auth, user }) {
 // ═══════════════════════════════════════════════════════════════════
 // COMPARE
 // ═══════════════════════════════════════════════════════════════════
-const BUILD_A = {
-  name: '1440p Gaming Beast', tag: 'Gaming', total: '$1,532',
-  parts: [
-    { p: 'CPU',  n: 'AMD Ryzen 7 7700X',          pr: '$299' },
-    { p: 'GPU',  n: 'NVIDIA RTX 4070 SUPER',        pr: '$599' },
-    { p: 'MOBO', n: 'MSI B650 Tomahawk WiFi',       pr: '$189' },
-    { p: 'RAM',  n: '32GB DDR5 6000MHz',            pr: '$109' },
-    { p: 'SSD',  n: '1TB WD Black SN850X NVMe',     pr: '$89'  },
-    { p: 'PSU',  n: '750W Corsair RM750x Gold',     pr: '$99'  },
-    { p: 'CASE', n: 'NZXT H5 Flow',                pr: '$89'  },
-    { p: 'COOL', n: 'Thermalright Peerless 120',    pr: '$39'  },
-  ],
-};
-const BUILD_B = {
-  name: 'Content Creator Pro', tag: 'Content', total: '$2,342',
-  parts: [
-    { p: 'CPU',  n: 'Intel Core i9-14900K',          pr: '$589', h: true },
-    { p: 'GPU',  n: 'NVIDIA RTX 4080 SUPER',          pr: '$999', h: true },
-    { p: 'MOBO', n: 'ASUS ROG Strix Z790-E WiFi',     pr: '$379', h: true },
-    { p: 'RAM',  n: '64GB DDR5 6400MHz',              pr: '$219', h: true },
-    { p: 'SSD',  n: '2TB Samsung 990 Pro NVMe',       pr: '$179', h: true },
-    { p: 'PSU',  n: '850W Corsair RM850x Gold',       pr: '$139', h: true },
-    { p: 'CASE', n: 'Fractal Design North',           pr: '$159', h: true },
-    { p: 'COOL', n: 'NZXT Kraken 360 Elite',          pr: '$279', h: true },
-  ],
-};
-const PERF = [
-  { l: 'Gaming\n1440p',    a: 85, b: 92 },
-  { l: 'Gaming\n4K',       a: 65, b: 88 },
-  { l: 'Content',          a: 70, b: 95 },
-  { l: 'Productivity',     a: 80, b: 90 },
-  { l: 'Future\nProofing', a: 75, b: 92 },
-];
-
 function ComparePage({ onNavigate, auth, user, onLogout }) {
   const isMobile = useIsMobile();
+  const [builds, setBuilds] = React.useState([]);
+  const [buildsLoading, setBuildsLoading] = React.useState(false);
+  const [buildAId, setBuildAId] = React.useState(null);
+  const [buildBId, setBuildBId] = React.useState(null);
+  const [buildADetail, setBuildADetail] = React.useState(null);
+  const [buildBDetail, setBuildBDetail] = React.useState(null);
+  const [compareError, setCompareError] = React.useState('');
+
+  React.useEffect(() => {
+    if (auth !== 'in') return;
+    setBuildsLoading(true);
+    apiFetch('/builds')
+      .then(data => {
+        const list = Array.isArray(data) ? data : [];
+        setBuilds(list);
+        if (list.length >= 1) setBuildAId(list[0].id);
+        if (list.length >= 2) setBuildBId(list[1].id);
+      })
+      .catch(err => setCompareError(err.message))
+      .finally(() => setBuildsLoading(false));
+  }, [auth]);
+
+  React.useEffect(() => {
+    if (!buildAId) { setBuildADetail(null); return; }
+    apiFetch(`/builds/${buildAId}`)
+      .then(data => setBuildADetail(data))
+      .catch(err => setCompareError(err.message));
+  }, [buildAId]);
+
+  React.useEffect(() => {
+    if (!buildBId) { setBuildBDetail(null); return; }
+    apiFetch(`/builds/${buildBId}`)
+      .then(data => setBuildBDetail(data))
+      .catch(err => setCompareError(err.message));
+  }, [buildBId]);
+
+  const getPerfScores = (detail) => {
+    if (!detail || !detail.components || !detail.components.length) return [50, 40, 45, 50, 45];
+    const get = (cat) => (detail.components.find(c => c.component_category === cat) || {}).part_price || 0;
+    const gpuP = get('gpu'), cpuP = get('cpu'), ramP = get('ram'), storP = get('storage');
+    const total = detail.total_price || 1;
+    const clamp = v => Math.max(15, Math.min(98, Math.round(v)));
+    return [
+      clamp(20 + (gpuP / 1200) * 75),
+      clamp(10 + (gpuP / 1500) * 85),
+      clamp(20 + ((cpuP + ramP) / 1500) * 75),
+      clamp(25 + ((cpuP + storP) / 1200) * 65),
+      clamp(15 + (total / 4000) * 80),
+    ];
+  };
+
+  const getAlloc = (detail) => {
+    if (!detail || !detail.components || !detail.components.length) return ALLOC;
+    const total = detail.total_price || 1;
+    return detail.components.map(c => ({
+      k: CAT_LABEL[c.component_category] || c.component_category.toUpperCase(),
+      v: Math.round((c.part_price / total) * 1000) / 10,
+      p: `$${Math.round(c.part_price).toLocaleString()}`,
+      c: CAT_COLOR[c.component_category] || BO.textDim,
+    }));
+  };
+
+  const toDisplay = (detail, otherDetail) => {
+    if (!detail) return null;
+    return {
+      name: detail.build_name,
+      tag: UC_DISPLAY[detail.use_case] || 'General',
+      total: `$${Math.round(detail.total_price).toLocaleString()}`,
+      parts: (detail.components || []).map(c => {
+        const other = otherDetail ? (otherDetail.components || []).find(x => x.component_category === c.component_category) : null;
+        return {
+          p: CAT_LABEL[c.component_category] || c.component_category.toUpperCase(),
+          n: c.part_name,
+          pr: `$${Math.round(c.part_price).toLocaleString()}`,
+          h: other ? c.part_price > other.part_price : false,
+        };
+      }),
+    };
+  };
+
+  const PERF_LABELS = ['Gaming\n1440p', 'Gaming\n4K', 'Content', 'Productivity', 'Future\nProofing'];
+  const scoresA = getPerfScores(buildADetail);
+  const scoresB = getPerfScores(buildBDetail);
+  const perfData = PERF_LABELS.map((l, i) => ({ l, a: scoresA[i], b: scoresB[i] }));
+  const displayA = toDisplay(buildADetail, buildBDetail);
+  const displayB = toDisplay(buildBDetail, buildADetail);
+  const allocA = getAlloc(buildADetail);
+  const allocB = getAlloc(buildBDetail);
+  const totalLabelA = buildADetail ? `$${Math.round(buildADetail.total_price).toLocaleString()}` : '$0';
+  const totalLabelB = buildBDetail ? `$${Math.round(buildBDetail.total_price).toLocaleString()}` : '$0';
+
+  const selectStyle = {
+    background: BO.panel, border: `1px solid ${BO.border}`, borderRadius: 8,
+    color: BO.text, padding: '6px 28px 6px 12px', fontFamily: 'inherit', fontSize: 13,
+    fontWeight: 600, cursor: 'pointer', outline: 'none', WebkitAppearance: 'none', appearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7293' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
+  };
 
   const BuildCol = ({ build, highlight }) => (
     <div className="bo-card" style={{ padding: 20, borderColor: highlight ? BO.primary : BO.border }}>
@@ -1118,6 +1202,56 @@ function ComparePage({ onNavigate, auth, user, onLogout }) {
     </div>
   );
 
+  if (auth !== 'in') {
+    return (
+      <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
+        <Nav active="compare" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
+        <div style={{ textAlign: 'center', padding: '80px 20px 60px' }}>
+          <Icon name="lock" size={40} color={BO.border} />
+          <div style={{ marginTop: 16, fontSize: 20, fontWeight: 700 }}>Log in to compare builds</div>
+          <div style={{ fontSize: 14, color: BO.textMuted, marginTop: 8, maxWidth: 320, margin: '8px auto 24px' }}>Save builds in the Optimizer, then compare them here.</div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 20 }}>
+            <button className="bo-btn primary sm" onClick={() => onNavigate('login')}>Log in</button>
+            <button className="bo-btn ghost sm" onClick={() => onNavigate('signup')}>Sign up</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (buildsLoading) {
+    return (
+      <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
+        <Nav active="compare" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: BO.textDim, fontSize: 14 }}>Loading builds…</div>
+      </div>
+    );
+  }
+
+  if (builds.length < 2) {
+    return (
+      <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
+        <Nav active="compare" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
+        <div style={{ textAlign: 'center', padding: '80px 20px 60px' }}>
+          <div style={{ width: 72, height: 72, borderRadius: 18, background: BO.primarySoft, border: `1px solid rgba(99,102,241,0.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <Icon name="compare" size={32} color={BO.primary} />
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, letterSpacing: -0.3 }}>
+            {builds.length === 0 ? 'No saved builds to compare' : 'Need one more build'}
+          </div>
+          <div style={{ fontSize: 14, color: BO.textMuted, maxWidth: 380, margin: '0 auto 24px', lineHeight: 1.55 }}>
+            {builds.length === 0
+              ? 'You need at least 2 saved builds to compare. Go to the Optimizer to generate and save builds.'
+              : 'You have 1 saved build. Save one more in the Optimizer to unlock side-by-side comparison.'}
+          </div>
+          <button className="bo-btn primary" onClick={() => onNavigate('optimizer')}>
+            <Icon name="zap" size={14} color="white" strokeWidth={0} /> Go to Optimizer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
       <Nav active="compare" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
@@ -1132,79 +1266,102 @@ function ComparePage({ onNavigate, auth, user, onLogout }) {
           {!isMobile && (
             <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
               <span style={{ color: BO.textMuted }}>Build A</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: BO.panel, border: `1px solid ${BO.border}`, borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
-                1440p Gaming Beast <Icon name="chevDn" size={12} color={BO.textDim} />
-              </div>
+              <select value={buildAId || ''} onChange={e => setBuildAId(Number(e.target.value))} style={selectStyle}>
+                {builds.map(b => <option key={b.id} value={b.id}>{b.build_name}</option>)}
+              </select>
               <span style={{ color: BO.textMuted }}>Build B</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: BO.panel, border: `1px solid ${BO.border}`, borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
-                Content Creator Pro <Icon name="chevDn" size={12} color={BO.textDim} />
-              </div>
+              <select value={buildBId || ''} onChange={e => setBuildBId(Number(e.target.value))} style={selectStyle}>
+                {builds.map(b => <option key={b.id} value={b.id}>{b.build_name}</option>)}
+              </select>
             </div>
           )}
         </div>
 
-        {/* Build columns */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 60px 1fr', gap: 16, alignItems: 'start', marginBottom: 24 }}>
-          <BuildCol build={BUILD_A} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '8px 0' : '60px 0' }}>
-            <div style={{ width: 48, height: 48, borderRadius: '50%', background: BO.primarySoft, border: `1px solid ${BO.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: BO.primary, fontSize: 14 }}>VS</div>
+        {isMobile && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 12, color: BO.textMuted, marginBottom: 6 }}>Build A</div>
+              <select value={buildAId || ''} onChange={e => setBuildAId(Number(e.target.value))} style={{ ...selectStyle, width: '100%', padding: '8px 28px 8px 12px' }}>
+                {builds.map(b => <option key={b.id} value={b.id}>{b.build_name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: BO.textMuted, marginBottom: 6 }}>Build B</div>
+              <select value={buildBId || ''} onChange={e => setBuildBId(Number(e.target.value))} style={{ ...selectStyle, width: '100%', padding: '8px 28px 8px 12px' }}>
+                {builds.map(b => <option key={b.id} value={b.id}>{b.build_name}</option>)}
+              </select>
+            </div>
           </div>
-          <BuildCol build={BUILD_B} highlight />
-        </div>
+        )}
 
-        {/* Charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.3fr 1fr', gap: 16, marginBottom: 24 }}>
+        {compareError && <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: `1px solid rgba(239,68,68,0.3)`, borderRadius: 8, color: '#fca5a5', fontSize: 13, marginBottom: 16 }}>{compareError}</div>}
 
-          {/* Performance bars */}
-          <div className="bo-card" style={{ padding: 22 }}>
-            <div style={{ fontFamily: BO.mono, fontSize: 11, fontWeight: 600, letterSpacing: 0.5, color: BO.textDim, marginBottom: 24 }}>PERFORMANCE SCORE COMPARISON</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 160, justifyContent: 'space-around', padding: '0 4px' }}>
-              {PERF.map((g, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1, height: '100%' }}>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 3, width: '100%', justifyContent: 'center' }}>
-                    <div style={{ width: 20, height: `${g.a}%`, background: `linear-gradient(180deg,${BO.content},${BO.content}99)`, borderRadius: '3px 3px 0 0', position: 'relative' }}>
-                      <div style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700 }}>{g.a}</div>
+        {displayA && displayB ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 60px 1fr', gap: 16, alignItems: 'start', marginBottom: 24 }}>
+              <BuildCol build={displayA} />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '8px 0' : '60px 0' }}>
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: BO.primarySoft, border: `1px solid ${BO.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: BO.primary, fontSize: 14 }}>VS</div>
+              </div>
+              <BuildCol build={displayB} highlight />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.3fr 1fr', gap: 16, marginBottom: 24 }}>
+              <div className="bo-card" style={{ padding: 22 }}>
+                <div style={{ fontFamily: BO.mono, fontSize: 11, fontWeight: 600, letterSpacing: 0.5, color: BO.textDim, marginBottom: 24 }}>PERFORMANCE SCORE COMPARISON</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 160, justifyContent: 'space-around', padding: '0 4px' }}>
+                  {perfData.map((g, i) => (
+                    <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1, height: '100%' }}>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 3, width: '100%', justifyContent: 'center' }}>
+                        <div style={{ width: 20, height: `${g.a}%`, background: `linear-gradient(180deg,${BO.content},${BO.content}99)`, borderRadius: '3px 3px 0 0', position: 'relative' }}>
+                          <div style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700 }}>{g.a}</div>
+                        </div>
+                        <div style={{ width: 20, height: `${g.b}%`, background: `linear-gradient(180deg,${BO.general},#f59e0b)`, borderRadius: '3px 3px 0 0', position: 'relative' }}>
+                          <div style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700 }}>{g.b}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 10, color: BO.textMuted, textAlign: 'center', lineHeight: 1.25, whiteSpace: 'pre-line' }}>{g.l}</div>
                     </div>
-                    <div style={{ width: 20, height: `${g.b}%`, background: `linear-gradient(180deg,${BO.general},#f59e0b)`, borderRadius: '3px 3px 0 0', position: 'relative' }}>
-                      <div style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700 }}>{g.b}</div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 10, color: BO.textMuted, textAlign: 'center', lineHeight: 1.25, whiteSpace: 'pre-line' }}>{g.l}</div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 16, marginTop: 20, paddingTop: 14, borderTop: `1px solid ${BO.borderSoft}`, fontSize: 12, justifyContent: 'center' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: BO.content }} /> Build A — {BUILD_A.name}</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: BO.general }} /> Build B — {BUILD_B.name}</span>
-            </div>
-          </div>
+                <div style={{ display: 'flex', gap: 16, marginTop: 20, paddingTop: 14, borderTop: `1px solid ${BO.borderSoft}`, fontSize: 12, justifyContent: 'center' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: BO.content }} /> Build A — {displayA.name}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: BO.general }} /> Build B — {displayB.name}</span>
+                </div>
+              </div>
 
-          {/* Donut comparison */}
-          <div className="bo-card" style={{ padding: 22 }}>
-            <div style={{ fontFamily: BO.mono, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: BO.text, marginBottom: 18 }}>BUDGET ALLOCATION COMPARISON</div>
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center' }}>
-              <div style={{ textAlign: 'center' }}>
-                <DonutChart size={130} />
-                <div style={{ fontSize: 12, color: BO.textMuted, marginTop: 8 }}>Build A</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <DonutChart size={130} />
-                <div style={{ fontSize: 12, color: BO.textMuted, marginTop: 8 }}>Build B</div>
+              <div className="bo-card" style={{ padding: 22 }}>
+                <div style={{ fontFamily: BO.mono, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: BO.text, marginBottom: 18 }}>BUDGET ALLOCATION COMPARISON</div>
+                <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <DonutChart size={130} alloc={allocA} totalLabel={totalLabelA} />
+                    <div style={{ fontSize: 12, color: BO.textMuted, marginTop: 8 }}>Build A</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <DonutChart size={130} alloc={allocB} totalLabel={totalLabelB} />
+                    <div style={{ fontSize: 12, color: BO.textMuted, marginTop: 8 }}>Build B</div>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginTop: 16, fontSize: 11 }}>
+                  {[['GPU',BO.gaming],['CPU',BO.content],['MOBO',BO.workstation],['RAM',BO.general],['Storage','#f472b6'],['PSU','#60a5fa'],['Case','#fb7185'],['Cooler','#34d399']].map(([l,c]) => (
+                    <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, color: BO.textMuted }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} /> {l}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginTop: 16, fontSize: 11 }}>
-              {[['GPU',BO.gaming],['CPU',BO.content],['MOBO',BO.workstation],['RAM',BO.general],['Storage','#f472b6'],['PSU','#60a5fa'],['Case','#fb7185'],['Cooler','#34d399']].map(([l,c]) => (
-                <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, color: BO.textMuted }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} /> {l}
-                </span>
-              ))}
-            </div>
+          </>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: BO.textDim, fontSize: 14 }}>
+            Loading build details…
           </div>
-        </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button className="bo-btn subtle"><Icon name="save" size={14} /> Save Build</button>
-          <button className="bo-btn primary"><Icon name="compare" size={14} /> Compare Another</button>
+          <button className="bo-btn primary" onClick={() => onNavigate('optimizer')}>
+            <Icon name="zap" size={14} color="white" strokeWidth={0} /> Optimize Another Build
+          </button>
         </div>
       </div>
     </div>
