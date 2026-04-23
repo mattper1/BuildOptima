@@ -62,6 +62,30 @@ const USECASE = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════════════════════
+const API_BASE = 'https://buildoptima-production.up.railway.app';
+
+async function apiFetch(path, opts = {}) {
+  const token = localStorage.getItem('bo_token');
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+const UC_MAP = { Gaming: 'gaming', Content: 'content_creation', Workstation: 'workstation', General: 'general' };
+const UC_DISPLAY = { gaming: 'Gaming', content_creation: 'Content', workstation: 'Workstation', general: 'General' };
+const CAT_ICON  = { cpu:'cpu', gpu:'gpu', ram:'ram', storage:'storage', motherboard:'mobo', psu:'psu', 'case':'case', cooler:'cooler' };
+const CAT_LABEL = { cpu:'CPU', gpu:'GPU', ram:'RAM', storage:'SSD', motherboard:'MOBO', psu:'PSU', 'case':'CASE', cooler:'COOL' };
+const CAT_COLOR = { cpu:BO.content, gpu:BO.gaming, ram:BO.general, storage:'#f472b6', motherboard:BO.workstation, psu:'#60a5fa', 'case':'#fb7185', cooler:'#34d399' };
+
+// ═══════════════════════════════════════════════════════════════════
 // GLOBAL CSS
 // ═══════════════════════════════════════════════════════════════════
 (function injectStyles() {
@@ -283,10 +307,12 @@ function Logomark({ size = 30 }) {
 // ═══════════════════════════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════════════════════════
-function Nav({ active, auth = 'out', onNavigate }) {
+function Nav({ active, auth = 'out', onNavigate, user, onLogout }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const isMobile = useIsMobile();
   const go = (s) => { onNavigate(s); setMenuOpen(false); };
+  const userEmail = user?.email || '';
+  const userInitial = userEmail ? userEmail[0].toUpperCase() : 'U';
 
   const links = [
     { id: 'landing', label: 'Home' },
@@ -316,11 +342,12 @@ function Nav({ active, auth = 'out', onNavigate }) {
         <div className="desktop-nav" style={{ display: 'flex' }}>
           {auth === 'in' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 13, color: BO.textMuted }}>kelsey@email.com</span>
+              <span style={{ fontSize: 13, color: BO.textMuted }}>{userEmail}</span>
               <div style={{ width: 34, height: 34, borderRadius: '50%',
                 background: `linear-gradient(135deg, ${BO.primary}, #8b5cf6)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>K</div>
+                fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>{userInitial}</div>
+              <button className="bo-btn ghost sm" onClick={onLogout}>Log out</button>
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 10 }}>
@@ -365,13 +392,12 @@ function Nav({ active, auth = 'out', onNavigate }) {
             <div style={{ flex: 1 }} />
             {auth === 'in' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0', borderTop: `1px solid ${BO.borderSoft}`, marginTop: 20 }}>
-                <div style={{ width: 38, height: 38, borderRadius: '50%', background: `linear-gradient(135deg, ${BO.primary}, #8b5cf6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>K</div>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', background: `linear-gradient(135deg, ${BO.primary}, #8b5cf6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>{userInitial}</div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>Kelsey Park</div>
-                  <div style={{ fontSize: 12, color: BO.textMuted }}>kelsey@email.com</div>
+                  <div style={{ fontSize: 12, color: BO.textMuted }}>{userEmail}</div>
                 </div>
                 <div style={{ flex: 1 }} />
-                <button className="bo-btn ghost sm">Log out</button>
+                <button className="bo-btn ghost sm" onClick={onLogout}>Log out</button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
@@ -389,13 +415,13 @@ function Nav({ active, auth = 'out', onNavigate }) {
 // ═══════════════════════════════════════════════════════════════════
 // LANDING
 // ═══════════════════════════════════════════════════════════════════
-function LandingPage({ onNavigate, auth }) {
+function LandingPage({ onNavigate, auth, user, onLogout }) {
   const isMobile = useIsMobile();
   const [imgErr, setImgErr] = React.useState(false);
 
   return (
     <div className="bo-root page-enter" style={{ position: 'relative', overflow: 'hidden' }}>
-      <Nav active="landing" auth={auth} onNavigate={onNavigate} />
+      <Nav active="landing" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
       <div className="bo-glow" style={{ top: 50 }} />
 
       {/* ── Hero ── */}
@@ -561,13 +587,13 @@ const ALLOC = [
   { k: 'Cooler',  v: 2.6,  p: '$39',  c: '#34d399' },
 ];
 
-function DonutChart({ size = 180 }) {
-  const total = ALLOC.reduce((a, b) => a + b.v, 0);
+function DonutChart({ size = 180, alloc = ALLOC, totalLabel = '$1,512' }) {
+  const total = alloc.reduce((a, b) => a + b.v, 0);
   const r = size / 2 - 16, cx = size / 2, cy = size / 2, ri = r * 0.62;
   let acc = 0;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Budget allocation donut chart">
-      {ALLOC.map((s, i) => {
+      {alloc.map((s, i) => {
         const a0 = (acc / total) * Math.PI * 2 - Math.PI / 2;
         acc += s.v;
         const a1 = (acc / total) * Math.PI * 2 - Math.PI / 2;
@@ -578,19 +604,97 @@ function DonutChart({ size = 180 }) {
         const x4 = cx + ri * Math.cos(a0), y4 = cy + ri * Math.sin(a0);
         return <path key={i} d={`M ${x1} ${y1} A ${r} ${r} 0 ${lg} 1 ${x2} ${y2} L ${x3} ${y3} A ${ri} ${ri} 0 ${lg} 0 ${x4} ${y4} Z`} fill={s.c} stroke={BO.panel} strokeWidth="2" />;
       })}
-      <text x={cx} y={cy - 4}  textAnchor="middle" fill={BO.text}    fontSize="20" fontWeight="800" fontFamily={BO.sans}>$1,512</text>
+      <text x={cx} y={cy - 4}  textAnchor="middle" fill={BO.text}    fontSize="20" fontWeight="800" fontFamily={BO.sans}>{totalLabel}</text>
       <text x={cx} y={cy + 14} textAnchor="middle" fill={BO.textDim} fontSize="11" fontFamily={BO.mono} letterSpacing="1">TOTAL</text>
     </svg>
   );
 }
 
-function OptimizerPage({ onNavigate, auth }) {
+function OptimizerPage({ onNavigate, auth, user, onLogout }) {
   const isMobile = useIsMobile();
   const [budget, setBudget] = React.useState(1500);
   const [useCase, setUseCase] = React.useState('Gaming');
   const [prefs, setPrefs] = React.useState({ future: true, gpu: false, quiet: false });
+  const [result, setResult] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [optError, setOptError] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [saveMsg, setSaveMsg] = React.useState('');
 
   const budgetPct = Math.max(0, Math.min(100, (budget - 300) / 47));
+
+  const handleOptimize = async () => {
+    setLoading(true);
+    setOptError('');
+    try {
+      const data = await apiFetch('/optimize', {
+        method: 'POST',
+        body: JSON.stringify({
+          budget,
+          use_case: UC_MAP[useCase],
+          future_proofing: prefs.future,
+          owns_gpu: prefs.gpu,
+          prefer_quiet_cooling: prefs.quiet,
+        }),
+      });
+      setResult(data);
+    } catch (err) {
+      setOptError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!result || saving) return;
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      await apiFetch('/builds/save', {
+        method: 'POST',
+        body: JSON.stringify({
+          build_name: `${useCase} $${budget.toLocaleString()} Build`,
+          use_case: UC_MAP[useCase],
+          budget,
+          total_price: result.total_price,
+          components: result.components.map(c => ({
+            category: c.category,
+            part_name: `${c.brand} ${c.name}`,
+            part_price: c.price,
+            reason_selected: c.reason,
+          })),
+        }),
+      });
+      setSaveMsg('Saved!');
+      setTimeout(() => setSaveMsg(''), 2500);
+    } catch (err) {
+      setSaveMsg(auth !== 'in' ? 'Log in to save builds' : err.message);
+      setTimeout(() => setSaveMsg(''), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const displayParts = result
+    ? result.components.map(c => ({
+        part:   CAT_LABEL[c.category] || c.category.toUpperCase(),
+        icon:   CAT_ICON[c.category]  || 'cpu',
+        name:   `${c.brand} ${c.name}`,
+        price:  `$${Math.round(c.price).toLocaleString()}`,
+        reason: c.reason,
+      }))
+    : PARTS;
+
+  const displayAlloc = result
+    ? result.components.map(c => ({
+        k: CAT_LABEL[c.category] || c.category,
+        v: result.total_price > 0 ? Math.round((c.price / result.total_price) * 1000) / 10 : 0,
+        p: `$${Math.round(c.price).toLocaleString()}`,
+        c: CAT_COLOR[c.category] || BO.textDim,
+      }))
+    : ALLOC;
+
+  const displayTotal = result ? `$${Math.round(result.total_price).toLocaleString()}` : '$1,512';
 
   const useCases = [
     { label: 'Gaming',           key: 'Gaming',      icon: 'play' },
@@ -682,8 +786,9 @@ function OptimizerPage({ onNavigate, auth }) {
         ))}
       </div>
 
-      <button className="bo-btn primary" style={{ width: '100%', padding: '14px', fontSize: 15 }}>
-        <Icon name="zap" size={16} color="white" strokeWidth={0} /> Optimize My Build
+      {optError && <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: `1px solid rgba(239,68,68,0.3)`, borderRadius: 8, color: '#fca5a5', fontSize: 13, marginBottom: 12 }}>{optError}</div>}
+      <button className="bo-btn primary" style={{ width: '100%', padding: '14px', fontSize: 15 }} onClick={handleOptimize} disabled={loading}>
+        {loading ? 'Optimizing…' : <><Icon name="zap" size={16} color="white" strokeWidth={0} /> Optimize My Build</>}
       </button>
     </aside>
   );
@@ -698,20 +803,23 @@ function OptimizerPage({ onNavigate, auth }) {
             <Chip usecase={useCase} />
           </div>
           <div style={{ fontSize: 13, color: BO.textMuted, marginTop: 4 }}>
-            Best value for <span style={{ color: BO.text, fontWeight: 600 }}>${budget.toLocaleString()}</span> · updated 2 min ago
+            Best value for <span style={{ color: BO.text, fontWeight: 600 }}>${budget.toLocaleString()}</span>
+            {result && <span> · {result.components.length} components selected</span>}
+            {!result && <span> · click Optimize to generate</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="bo-btn subtle sm"><Icon name="save" size={14} /> Save</button>
-          <button className="bo-btn subtle sm"><Icon name="share" size={14} /> Share</button>
-          <button className="bo-btn subtle sm"><Icon name="download" size={14} /> Export</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className="bo-btn subtle sm" onClick={handleSave} disabled={saving || !result}>
+            <Icon name="save" size={14} /> {saving ? 'Saving…' : 'Save'}
+          </button>
+          {saveMsg && <span style={{ fontSize: 12, color: saveMsg === 'Saved!' ? BO.success : BO.danger }}>{saveMsg}</span>}
         </div>
       </div>
 
       {/* Parts list + allocation */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.5fr 1fr', gap: 24 }}>
         <div>
-          {PARTS.map(p => (
+          {displayParts.map(p => (
             <div key={p.part} className="build-row">
               <div style={{ width: 40, height: 40, borderRadius: 8, background: BO.primarySoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Icon name={p.icon} size={20} color={BO.primary} />
@@ -729,7 +837,7 @@ function OptimizerPage({ onNavigate, auth }) {
               <div style={{ fontFamily: BO.mono, fontSize: 11, color: BO.textDim, letterSpacing: 1, fontWeight: 600 }}>TOTAL</div>
               <div style={{ fontSize: 13, color: BO.textMuted }}>All components included</div>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>$1,512</div>
+            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>{displayTotal}</div>
           </div>
         </div>
 
@@ -738,9 +846,9 @@ function OptimizerPage({ onNavigate, auth }) {
           <div className="bo-card" style={{ padding: 22, alignSelf: 'flex-start' }}>
             <div style={{ fontFamily: BO.mono, fontSize: 11, color: BO.textDim, letterSpacing: 1.2, marginBottom: 12, fontWeight: 500 }}>3. BUDGET ALLOCATION</div>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-              <DonutChart />
+              <DonutChart alloc={displayAlloc} totalLabel={displayTotal} />
             </div>
-            {ALLOC.map(r => (
+            {displayAlloc.map(r => (
               <div key={r.k} style={{ display: 'grid', gridTemplateColumns: '12px 1fr auto auto', gap: 10, alignItems: 'center', padding: '6px 0', fontSize: 12.5 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: r.c }} />
                 <span style={{ color: BO.textMuted }}>{r.k}</span>
@@ -753,7 +861,9 @@ function OptimizerPage({ onNavigate, auth }) {
                 <Icon name="ai" size={14} color={BO.primary} /> WHY THIS BUILD?
               </div>
               <div style={{ fontSize: 12.5, color: BO.textMuted, lineHeight: 1.55 }}>
-                Optimized for 1440p {useCase === 'Gaming' ? 'gaming' : useCase.toLowerCase()}. GPU takes priority for high frame rates, with CPU and 32GB RAM ensuring smooth performance and multitasking.
+                {result
+                  ? `Optimized for ${useCase.toLowerCase()} at $${budget.toLocaleString()}. ${result.components.length} components chosen to maximize value within budget.`
+                  : `Click "Optimize My Build" to generate a personalized ${useCase.toLowerCase()} build for your budget.`}
               </div>
             </div>
           </div>
@@ -764,7 +874,7 @@ function OptimizerPage({ onNavigate, auth }) {
 
   return (
     <div className="bo-root page-enter" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Nav active="optimizer" auth={auth} onNavigate={onNavigate} />
+      <Nav active="optimizer" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
       <div style={{
         display: 'flex',
         flexDirection: isMobile ? 'column' : 'row',
@@ -792,27 +902,54 @@ const BUILDS = [
 ];
 const PICONS = ['cpu', 'gpu', 'ram', 'storage', 'mobo', 'psu', 'case'];
 
-function SavedPage({ onNavigate, auth }) {
+function SavedPage({ onNavigate, auth, user }) {
   const isMobile = useIsMobile();
   const [filter, setFilter] = React.useState('All');
   const [search, setSearch] = React.useState('');
+  const [builds, setBuilds] = React.useState([]);
+  const [fetchLoading, setFetchLoading] = React.useState(false);
+  const [fetchError, setFetchError] = React.useState('');
 
-  const visible = BUILDS
-    .filter(b => filter === 'All' || b.tag === filter)
-    .filter(b => !search || b.name.toLowerCase().includes(search.toLowerCase()));
+  React.useEffect(() => {
+    if (auth !== 'in') return;
+    setFetchLoading(true);
+    setFetchError('');
+    apiFetch('/builds')
+      .then(data => setBuilds(data))
+      .catch(err => setFetchError(err.message))
+      .finally(() => setFetchLoading(false));
+  }, [auth]);
 
-  const counts = { All: 6, Gaming: 3, Content: 1, Workstation: 1, General: 1 };
+  const handleDelete = async (id) => {
+    try {
+      await apiFetch(`/builds/${id}`, { method: 'DELETE' });
+      setBuilds(prev => prev.filter(b => b.id !== id));
+    } catch (err) {
+      setFetchError(`Delete failed: ${err.message}`);
+    }
+  };
+
+  const formatDate = (dt) => new Date(dt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const visible = builds
+    .filter(b => filter === 'All' || UC_DISPLAY[b.use_case] === filter)
+    .filter(b => !search || b.build_name.toLowerCase().includes(search.toLowerCase()));
+
+  const counts = { All: builds.length, Gaming: 0, Content: 0, Workstation: 0, General: 0 };
+  builds.forEach(b => { const k = UC_DISPLAY[b.use_case]; if (k && counts[k] !== undefined) counts[k]++; });
 
   return (
     <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
-      <Nav active="saved" auth={auth} onNavigate={onNavigate} />
+      <Nav active="saved" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
       <div style={{ padding: isMobile ? '22px 18px 48px' : '32px 48px 48px' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
           <div>
             <h1 style={{ fontSize: isMobile ? 24 : 32, margin: 0, fontWeight: 800, letterSpacing: -0.8 }}>My Saved Builds</h1>
-            <div style={{ fontSize: 13, color: BO.textMuted, marginTop: 4 }}>6 builds · signed in as kelsey@email.com</div>
+            <div style={{ fontSize: 13, color: BO.textMuted, marginTop: 4 }}>
+              {auth === 'in' ? `${builds.length} build${builds.length !== 1 ? 's' : ''} · ${user?.email || ''}` : 'Log in to view your builds'}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ position: 'relative' }}>
@@ -838,19 +975,39 @@ function SavedPage({ onNavigate, auth }) {
           <button className="bo-btn subtle sm">Sort: Newest <Icon name="chevDn" size={13} /></button>
         </div>
 
+        {/* Error */}
+        {fetchError && <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: `1px solid rgba(239,68,68,0.3)`, borderRadius: 8, color: '#fca5a5', fontSize: 13, marginBottom: 16 }}>{fetchError}</div>}
+
+        {/* Not logged in */}
+        {auth !== 'in' && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: BO.textDim }}>
+            <Icon name="lock" size={40} color={BO.border} />
+            <div style={{ marginTop: 12, fontSize: 15 }}>Log in to view your saved builds</div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>
+              <button className="bo-btn primary sm" onClick={() => onNavigate('login')}>Log in</button>
+              <button className="bo-btn ghost sm" onClick={() => onNavigate('signup')}>Sign up</button>
+            </div>
+          </div>
+        )}
+
+        {/* Loading */}
+        {auth === 'in' && fetchLoading && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: BO.textDim, fontSize: 14 }}>Loading builds…</div>
+        )}
+
         {/* Grid */}
-        {visible.length > 0 ? (
+        {auth === 'in' && !fetchLoading && (visible.length > 0 ? (
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 20 }}>
-            {visible.map((b, i) => (
-              <div key={i} className="bo-card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {visible.map((b) => (
+              <div key={b.id} className="bo-card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, letterSpacing: -0.2 }}>{b.name}</div>
-                    <div style={{ fontSize: 12, color: BO.textDim }}>{b.date}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, letterSpacing: -0.2 }}>{b.build_name}</div>
+                    <div style={{ fontSize: 12, color: BO.textDim }}>{formatDate(b.created_at)}</div>
                   </div>
-                  <Chip usecase={b.tag} size="sm" />
+                  <Chip usecase={UC_DISPLAY[b.use_case] || 'General'} size="sm" />
                 </div>
-                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>{b.price}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>${Math.round(b.total_price).toLocaleString()}</div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {PICONS.map((p, j) => (
                     <div key={j} style={{ width: 34, height: 34, borderRadius: 7, background: BO.bg, border: `1px solid ${BO.borderSoft}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -859,9 +1016,8 @@ function SavedPage({ onNavigate, auth }) {
                   ))}
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                  <button className="bo-btn subtle sm" style={{ flex: 1 }}><Icon name="eye" size={13} /> View</button>
-                  <button className="bo-btn primary sm" style={{ flex: 1 }} onClick={() => onNavigate('compare')}><Icon name="compare" size={13} /> Compare</button>
-                  <button className="bo-btn subtle sm danger" style={{ width: 34 }} aria-label="Delete build"><Icon name="trash" size={14} /></button>
+                  <button className="bo-btn primary sm" style={{ flex: 1 }} onClick={() => onNavigate('optimizer')}><Icon name="zap" size={13} /> Rebuild</button>
+                  <button className="bo-btn subtle sm danger" style={{ width: 34 }} aria-label="Delete build" onClick={() => handleDelete(b.id)}><Icon name="trash" size={14} /></button>
                 </div>
               </div>
             ))}
@@ -869,10 +1025,15 @@ function SavedPage({ onNavigate, auth }) {
         ) : (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: BO.textDim }}>
             <Icon name="search" size={40} color={BO.border} />
-            <div style={{ marginTop: 12, fontSize: 15 }}>No builds match your search</div>
-            <button className="bo-btn ghost sm" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setFilter('All'); }}>Clear filters</button>
+            <div style={{ marginTop: 12, fontSize: 15 }}>
+              {builds.length === 0 ? "No saved builds yet — optimize a build and save it!" : "No builds match your search"}
+            </div>
+            {builds.length > 0
+              ? <button className="bo-btn ghost sm" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setFilter('All'); }}>Clear filters</button>
+              : <button className="bo-btn primary sm" style={{ marginTop: 16 }} onClick={() => onNavigate('optimizer')}>Build Your PC</button>
+            }
           </div>
-        )}
+        ))}
 
         {/* Pagination */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 32 }}>
@@ -930,7 +1091,7 @@ const PERF = [
   { l: 'Future\nProofing', a: 75, b: 92 },
 ];
 
-function ComparePage({ onNavigate, auth }) {
+function ComparePage({ onNavigate, auth, user, onLogout }) {
   const isMobile = useIsMobile();
 
   const BuildCol = ({ build, highlight }) => (
@@ -959,7 +1120,7 @@ function ComparePage({ onNavigate, auth }) {
 
   return (
     <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
-      <Nav active="compare" auth={auth} onNavigate={onNavigate} />
+      <Nav active="compare" auth={auth} onNavigate={onNavigate} user={user} onLogout={onLogout} />
       <div style={{ padding: isMobile ? '20px 18px 48px' : '24px 48px 48px' }}>
 
         <button className="bo-btn ghost sm" style={{ marginBottom: 16 }} onClick={() => onNavigate('saved')}>
@@ -1058,9 +1219,28 @@ function AuthPage({ mode, onNavigate, onSuccess }) {
   const isLogin = mode === 'login';
   const [email, setEmail] = React.useState('');
   const [pass, setPass] = React.useState('');
-  const [name, setName] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
 
-  const handleSubmit = (e) => { e.preventDefault(); onSuccess(); };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const path = isLogin ? '/auth/login' : '/auth/register';
+      const data = await apiFetch(path, {
+        method: 'POST',
+        body: JSON.stringify({ email, password: pass }),
+      });
+      localStorage.setItem('bo_token', data.access_token);
+      localStorage.setItem('bo_user', JSON.stringify({ email }));
+      onSuccess({ email });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="bo-root page-enter" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh' }}>
@@ -1084,12 +1264,7 @@ function AuthPage({ mode, onNavigate, onSuccess }) {
           </p>
 
           <form onSubmit={handleSubmit}>
-            {!isLogin && (
-              <div style={{ marginBottom: 16 }}>
-                <label htmlFor="auth-name" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Full Name</label>
-                <input id="auth-name" className="bo-input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} autoComplete="name" />
-              </div>
-            )}
+            {error && <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: `1px solid rgba(239,68,68,0.3)`, borderRadius: 8, color: '#fca5a5', fontSize: 13, marginBottom: 16 }}>{error}</div>}
             <div style={{ marginBottom: 16 }}>
               <label htmlFor="auth-email" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Email</label>
               <div style={{ position: 'relative' }}>
@@ -1120,8 +1295,8 @@ function AuthPage({ mode, onNavigate, onSuccess }) {
               </label>
             )}
 
-            <button type="submit" className="bo-btn primary" style={{ width: '100%', padding: '12px', fontSize: 15 }}>
-              {isLogin ? 'Log in' : 'Sign Up'}
+            <button type="submit" className="bo-btn primary" style={{ width: '100%', padding: '12px', fontSize: 15 }} disabled={loading}>
+              {loading ? (isLogin ? 'Logging in…' : 'Creating account…') : (isLogin ? 'Log in' : 'Sign Up')}
             </button>
           </form>
 
@@ -1151,19 +1326,29 @@ function AuthPage({ mode, onNavigate, onSuccess }) {
 // ═══════════════════════════════════════════════════════════════════
 function App() {
   const [screen, setScreen] = React.useState('landing');
-  const [auth, setAuth] = React.useState('out');
+  const [user, setUser] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('bo_user') || 'null'); } catch { return null; }
+  });
+  const auth = user ? 'in' : 'out';
 
   const navigate = React.useCallback((s) => {
     setScreen(s);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const handleAuthSuccess = React.useCallback(() => {
-    setAuth('in');
+  const handleAuthSuccess = React.useCallback((userData) => {
+    setUser(userData);
     navigate('optimizer');
   }, [navigate]);
 
-  const props = { onNavigate: navigate, auth };
+  const handleLogout = React.useCallback(() => {
+    localStorage.removeItem('bo_token');
+    localStorage.removeItem('bo_user');
+    setUser(null);
+    navigate('landing');
+  }, [navigate]);
+
+  const props = { onNavigate: navigate, auth, user, onLogout: handleLogout };
 
   return (
     <React.Fragment key={screen}>
