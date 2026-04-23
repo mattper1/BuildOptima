@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MPOptima — PC Build Optimizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body { height: 100%; background: #0a0d1a; overflow-x: hidden; }
+    #root { min-height: 100%; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #252a42; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #6b7293; }
+    * { scrollbar-width: thin; scrollbar-color: #252a42 transparent; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+// ═══════════════════════════════════════════════════════════════════
+// DESIGN TOKENS
+// ═══════════════════════════════════════════════════════════════════
+const BO = {
+  bg:           '#0a0d1a',
+  bgAlt:        '#0f1324',
+  panel:        '#131729',
+  panel2:       '#1a1f33',
+  border:       '#252a42',
+  borderSoft:   '#1d2238',
+  text:         '#f1f3fa',
+  textMuted:    '#9ba3c0',
+  textDim:      '#6b7293',
+  primary:      '#6366f1',
+  primaryHover: '#7779f5',
+  primarySoft:  'rgba(99,102,241,0.15)',
+  gaming:       '#a78bfa',
+  content:      '#22d3ee',
+  workstation:  '#10b981',
+  general:      '#fbbf24',
+  danger:       '#ef4444',
+  success:      '#10b981',
+  sans:  '"Inter", system-ui, -apple-system, sans-serif',
+  mono:  '"JetBrains Mono", ui-monospace, monospace',
+};
+
+const USECASE = {
+  Gaming:      { hue: BO.gaming,      bg: 'rgba(167,139,250,0.12)' },
+  Content:     { hue: BO.content,     bg: 'rgba(34,211,238,0.12)'  },
+  Workstation: { hue: BO.workstation, bg: 'rgba(16,185,129,0.12)'  },
+  General:     { hue: BO.general,     bg: 'rgba(251,191,36,0.12)'  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// GLOBAL CSS
+// ═══════════════════════════════════════════════════════════════════
+(function injectStyles() {
+  if (document.getElementById('bo-css')) return;
+  const el = document.createElement('style');
+  el.id = 'bo-css';
+  el.textContent = `
+    .bo-root {
+      width: 100%; min-height: 100vh;
+      background: ${BO.bg}; color: ${BO.text};
+      font-family: ${BO.sans}; font-size: 14px; line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .bo-root *, .bo-root *::before, .bo-root *::after { box-sizing: border-box; }
+    .bo-root a { color: inherit; text-decoration: none; }
+
+    .bo-nav {
+      display: flex; align-items: center; gap: 28px;
+      padding: 16px 36px;
+      border-bottom: 1px solid ${BO.borderSoft};
+      background: rgba(10,13,26,0.92);
+      backdrop-filter: blur(12px);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .bo-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 18px; letter-spacing: -0.3px;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .bo-logomark {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: linear-gradient(135deg, ${BO.primary} 0%, #8b5cf6 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; color: white;
+      box-shadow: 0 4px 14px -2px rgba(99,102,241,0.5);
+      flex-shrink: 0;
+    }
+    .bo-navlinks { display: flex; gap: 28px; font-size: 14px; color: ${BO.textMuted}; }
+    .bo-navlinks a { transition: color .15s; cursor: pointer; }
+    .bo-navlinks a:hover { color: ${BO.text}; }
+    .bo-navlinks a.active {
+      color: ${BO.text}; font-weight: 600; position: relative;
+    }
+    .bo-navlinks a.active::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: -17px;
+      height: 2px; background: ${BO.primary}; border-radius: 1px;
+    }
+
+    .bo-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 18px; border-radius: 8px;
+      font-family: inherit; font-size: 14px; font-weight: 600;
+      border: 1px solid transparent;
+      cursor: pointer; transition: all .15s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .bo-btn:focus-visible { outline: 2px solid ${BO.primary}; outline-offset: 2px; }
+    .bo-btn.primary { background: ${BO.primary}; color: white; box-shadow: 0 4px 14px -2px rgba(99,102,241,0.45); }
+    .bo-btn.primary:hover { background: ${BO.primaryHover}; }
+    .bo-btn.ghost { background: transparent; color: ${BO.text}; border-color: ${BO.border}; }
+    .bo-btn.ghost:hover { background: ${BO.panel}; border-color: ${BO.textDim}; }
+    .bo-btn.subtle { background: ${BO.panel}; color: ${BO.text}; border-color: ${BO.border}; }
+    .bo-btn.subtle:hover { background: ${BO.panel2}; }
+    .bo-btn.sm { padding: 6px 12px; font-size: 13px; border-radius: 6px; }
+    .bo-btn.icon-sq { padding: 8px; width: 34px; height: 34px; }
+    .bo-btn.danger { color: ${BO.danger}; }
+    .bo-btn.danger:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.4); }
+
+    .bo-card { background: ${BO.panel}; border: 1px solid ${BO.border}; border-radius: 12px; }
+
+    .bo-input {
+      background: ${BO.bg}; border: 1px solid ${BO.border}; border-radius: 8px;
+      padding: 10px 14px; color: ${BO.text};
+      font-family: inherit; font-size: 14px; width: 100%;
+      transition: border-color .15s, box-shadow .15s; outline: none;
+    }
+    .bo-input:focus { border-color: ${BO.primary}; box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+    .bo-input::placeholder { color: ${BO.textDim}; }
+
+    .bo-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 10px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; line-height: 1.4; flex-shrink: 0;
+    }
+
+    .bo-toggle {
+      width: 38px; height: 22px; border-radius: 11px;
+      background: ${BO.border}; position: relative;
+      cursor: pointer; transition: background .18s; flex-shrink: 0;
+      border: none;
+    }
+    .bo-toggle:focus-visible { outline: 2px solid ${BO.primary}; outline-offset: 2px; }
+    .bo-toggle.on { background: ${BO.primary}; }
+    .bo-toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: white; transition: left .18s;
+    }
+    .bo-toggle.on::after { left: 18px; }
+
+    .bo-glow {
+      position: absolute; inset: -120px; pointer-events: none; z-index: 0;
+      background:
+        radial-gradient(ellipse 600px 400px at 70% 30%, rgba(99,102,241,0.3), transparent 70%),
+        radial-gradient(ellipse 500px 350px at 30% 80%, rgba(139,92,246,0.18), transparent 70%);
+    }
+
+    .filter-pill {
+      padding: 7px 14px; border-radius: 999px;
+      border: 1px solid ${BO.border}; background: ${BO.panel};
+      color: ${BO.textMuted}; font-size: 13px; font-weight: 600;
+      cursor: pointer; font-family: inherit; transition: all .15s;
+    }
+    .filter-pill.active { background: ${BO.primary}; border-color: ${BO.primary}; color: white; }
+    .filter-pill:hover:not(.active) { background: ${BO.panel2}; color: ${BO.text}; }
+    .filter-pill:focus-visible { outline: 2px solid ${BO.primary}; outline-offset: 2px; }
+
+    .build-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px 16px; background: ${BO.panel};
+      border: 1px solid ${BO.border}; border-radius: 10px;
+      margin-bottom: 8px; transition: border-color .15s, background .15s;
+    }
+    .build-row:hover { border-color: ${BO.textDim}; background: ${BO.panel2}; }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .page-enter { animation: fadeSlide 0.22s ease forwards; }
+
+    @media (max-width: 768px) {
+      .bo-nav { padding: 14px 20px; }
+      .desktop-nav { display: none !important; }
+    }
+    @media (min-width: 769px) {
+      .mobile-nav { display: none !important; }
+    }
+  `;
+  document.head.appendChild(el);
+})();
+
+// ═══════════════════════════════════════════════════════════════════
+// HOOKS
+// ═══════════════════════════════════════════════════════════════════
+function useIsMobile(bp = 768) {
+  const [v, setV] = React.useState(() => window.innerWidth <= bp);
+  React.useEffect(() => {
+    const h = () => setV(window.innerWidth <= bp);
+    window.addEventListener('resize', h);
+    return () => window.removeEventListener('resize', h);
+  }, [bp]);
+  return v;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ICON SYSTEM
+// ═══════════════════════════════════════════════════════════════════
+function Icon({ name, size = 16, color = 'currentColor', strokeWidth = 1.8, style: s }) {
+  const paths = {
+    cpu:     <g><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></g>,
+    gpu:     <g><rect x="2" y="7" width="20" height="11" rx="2"/><circle cx="8" cy="12.5" r="2.5"/><circle cx="16" cy="12.5" r="2.5"/><path d="M22 10h-2"/></g>,
+    ram:     <g><rect x="2" y="8" width="20" height="10" rx="1"/><path d="M6 8v-2M10 8v-2M14 8v-2M18 8v-2M7 18v2M12 18v2M17 18v2"/></g>,
+    storage: <g><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill={color}/></g>,
+    mobo:    <g><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="5" height="5"/><path d="M14 8h4M14 11h4M7 15h10M7 18h6"/></g>,
+    psu:     <g><rect x="2" y="6" width="20" height="12" rx="1.5"/><circle cx="8" cy="12" r="3"/><path d="M16 10h3M16 14h3"/></g>,
+    case:    <g><rect x="5" y="2" width="14" height="20" rx="1.5"/><path d="M9 6h6M9 10h6"/><circle cx="12" cy="17" r="1.5"/></g>,
+    cooler:  <g><circle cx="12" cy="12" r="8"/><path d="M12 4c2 3 2 5 0 8M12 20c-2-3-2-5 0-8M4 12c3-2 5-2 8 0M20 12c-3 2-5 2-8 0"/></g>,
+    play:    <g><polygon points="6,4 20,12 6,20" fill={color} stroke="none"/></g>,
+    zap:     <g><polygon points="13,2 3,14 12,14 11,22 21,10 12,10" fill={color} stroke="none"/></g>,
+    trophy:  <g><path d="M8 21h8M12 17v4M6 4h12v4a6 6 0 01-12 0V4z"/><path d="M6 6H4a2 2 0 002 3M18 6h2a2 2 0 01-2 3"/></g>,
+    save:    <g><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></g>,
+    share:   <g><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></g>,
+    download:<g><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></g>,
+    search:  <g><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></g>,
+    filter:  <g><polygon points="22,3 2,3 10,12.5 10,19 14,21 14,12.5"/></g>,
+    plus:    <g><path d="M12 5v14M5 12h14"/></g>,
+    trash:   <g><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></g>,
+    eye:     <g><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></g>,
+    compare: <g><path d="M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h3M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3M12 3v18"/></g>,
+    chev:    <g><polyline points="9,6 15,12 9,18"/></g>,
+    chevDn:  <g><polyline points="6,9 12,15 18,9"/></g>,
+    lock:    <g><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></g>,
+    mail:    <g><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,6 12,13 22,6"/></g>,
+    ai:      <g><path d="M12 2l2.5 5.5L20 10l-5.5 2.5L12 18l-2.5-5.5L4 10l5.5-2.5z"/></g>,
+    close:   <g><path d="M6 6l12 12M18 6L6 18"/></g>,
+    arrow:   <g><path d="M5 12h14M13 6l6 6-6 6"/></g>,
+    menu:    <g><path d="M3 6h18M3 12h18M3 18h18"/></g>,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+      style={{ flexShrink: 0, ...s }} aria-hidden="true">
+      {paths[name] || paths.cpu}
+    </svg>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SHARED
+// ═══════════════════════════════════════════════════════════════════
+function Chip({ usecase, size = 'md' }) {
+  const uc = USECASE[usecase] || USECASE.General;
+  const sz = size === 'sm' ? { padding: '2px 8px', fontSize: 11 } : { padding: '3px 10px', fontSize: 12 };
+  return (
+    <span className="bo-chip" style={{ background: uc.bg, color: uc.hue, ...sz }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: uc.hue, flexShrink: 0 }} />
+      {usecase}
+    </span>
+  );
+}
+
+function Logomark({ size = 30 }) {
+  return (
+    <div className="bo-logomark" style={{ width: size, height: size, fontSize: size * 0.47 }}>B</div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════════════════════════════════
+function Nav({ active, auth = 'out', onNavigate }) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const isMobile = useIsMobile();
+  const go = (s) => { onNavigate(s); setMenuOpen(false); };
+
+  const links = [
+    { id: 'landing', label: 'Home' },
+    { id: 'optimizer', label: 'Optimizer' },
+    { id: 'saved', label: 'My Builds' },
+    { id: 'compare', label: 'Compare' },
+  ];
+
+  return (
+    <>
+      <nav className="bo-nav">
+        <div className="bo-logo" onClick={() => go('landing')}>
+          <Logomark size={isMobile ? 28 : 30} />
+          <span style={{ fontSize: isMobile ? 16 : 18 }}>MPOptima</span>
+        </div>
+
+        {/* Desktop links */}
+        <div className="bo-navlinks desktop-nav">
+          {links.map(l => (
+            <a key={l.id} className={active === l.id ? 'active' : ''} onClick={() => go(l.id)}>{l.label}</a>
+          ))}
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        {/* Desktop auth */}
+        <div className="desktop-nav" style={{ display: 'flex' }}>
+          {auth === 'in' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 13, color: BO.textMuted }}>kelsey@email.com</span>
+              <div style={{ width: 34, height: 34, borderRadius: '50%',
+                background: `linear-gradient(135deg, ${BO.primary}, #8b5cf6)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>K</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="bo-btn ghost sm" onClick={() => go('login')}>Log in</button>
+              <button className="bo-btn primary sm" onClick={() => go('signup')}>Sign up</button>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile burger */}
+        <button className="mobile-nav bo-btn subtle sm icon-sq" aria-label="Toggle menu" onClick={() => setMenuOpen(o => !o)}>
+          <Icon name={menuOpen ? 'close' : 'menu'} size={20} />
+        </button>
+      </nav>
+
+      {/* Mobile full-screen menu */}
+      {isMobile && menuOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: BO.bg, display: 'flex', flexDirection: 'column' }}>
+          <nav className="bo-nav" style={{ padding: '14px 20px', gap: 0 }}>
+            <div className="bo-logo" onClick={() => go('landing')}>
+              <Logomark size={28} />
+              <span style={{ fontSize: 16 }}>MPOptima</span>
+            </div>
+            <div style={{ flex: 1 }} />
+            <button className="bo-btn subtle sm icon-sq" aria-label="Close menu" onClick={() => setMenuOpen(false)}>
+              <Icon name="close" size={20} />
+            </button>
+          </nav>
+          <div style={{ flex: 1, padding: '28px 24px', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+            <div style={{ fontFamily: BO.mono, fontSize: 11, letterSpacing: 1, color: BO.textDim, marginBottom: 20 }}>MENU</div>
+            {links.map(l => (
+              <a key={l.id} onClick={() => go(l.id)} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '20px 0', borderBottom: `1px solid ${BO.borderSoft}`,
+                fontSize: 22, fontWeight: 700, letterSpacing: -0.5, cursor: 'pointer',
+                color: active === l.id ? BO.primary : BO.text,
+              }}>
+                {l.label}
+                <Icon name="chev" size={18} color={active === l.id ? BO.primary : BO.textDim} />
+              </a>
+            ))}
+            <div style={{ flex: 1 }} />
+            {auth === 'in' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0', borderTop: `1px solid ${BO.borderSoft}`, marginTop: 20 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', background: `linear-gradient(135deg, ${BO.primary}, #8b5cf6)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>K</div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Kelsey Park</div>
+                  <div style={{ fontSize: 12, color: BO.textMuted }}>kelsey@email.com</div>
+                </div>
+                <div style={{ flex: 1 }} />
+                <button className="bo-btn ghost sm">Log out</button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
+                <button className="bo-btn primary" style={{ padding: '14px', fontSize: 15 }} onClick={() => go('signup')}>Sign up free</button>
+                <button className="bo-btn ghost"   style={{ padding: '14px', fontSize: 15 }} onClick={() => go('login')}>Log in</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LANDING
+// ═══════════════════════════════════════════════════════════════════
+function LandingPage({ onNavigate, auth }) {
+  const isMobile = useIsMobile();
+  const [imgErr, setImgErr] = React.useState(false);
+
+  return (
+    <div className="bo-root page-enter" style={{ position: 'relative', overflow: 'hidden' }}>
+      <Nav active="landing" auth={auth} onNavigate={onNavigate} />
+      <div className="bo-glow" style={{ top: 50 }} />
+
+      {/* ── Hero ── */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        padding: isMobile
+          ? '32px 22px 0'
+          : 'clamp(40px,5vw,60px) clamp(24px,5.6vw,72px) 0',
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '1.05fr 1fr',
+        gap: isMobile ? 0 : 'clamp(24px,3.5vw,48px)',
+        alignItems: 'center',
+      }}>
+        {/* Copy */}
+        <div>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '6px 12px', borderRadius: 999,
+            background: BO.primarySoft, border: `1px solid rgba(99,102,241,0.3)`,
+            fontSize: isMobile ? 10.5 : 12, fontWeight: 600, color: '#a5b4fc',
+            marginBottom: 20, letterSpacing: 0.3,
+          }}>
+            <Icon name="zap" size={isMobile ? 11 : 13} color={BO.primary} strokeWidth={0} />
+            {isMobile ? 'SMARTER BUILDS' : 'SMARTER BUILDS, BETTER PERFORMANCE'}
+          </div>
+          <h1 style={{ fontSize: isMobile ? 36 : 'clamp(40px,5vw,64px)', lineHeight: 1.02, margin: 0, fontWeight: 800, letterSpacing: -1.8 }}>
+            Optimize Your PC.<br />
+            <span style={{ background: 'linear-gradient(120deg,#a5b4fc 0%,#c4b5fd 50%,#818cf8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              Maximize Performance.
+            </span>
+          </h1>
+          <p style={{ fontSize: isMobile ? 14 : 'clamp(14px,1.3vw,17px)', color: BO.textMuted, maxWidth: 500, marginTop: 18, lineHeight: 1.55 }}>
+            {isMobile
+              ? 'Advanced algorithms find the perfect PC build for your budget.'
+              : 'MPOptima uses advanced algorithms to find the perfect PC build for your budget and needs.'}
+          </p>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 12, marginTop: isMobile ? 22 : 36 }}>
+            <button className="bo-btn primary" style={{ padding: isMobile ? '14px 18px' : '13px 24px', fontSize: 15, justifyContent: isMobile ? 'center' : undefined }}
+              onClick={() => onNavigate('optimizer')}>
+              Build Your PC <Icon name="arrow" size={16} />
+            </button>
+            <button className="bo-btn ghost" style={{ padding: isMobile ? '14px 18px' : '13px 20px', fontSize: isMobile ? 14 : 15, justifyContent: isMobile ? 'center' : undefined }}
+              onClick={() => onNavigate('saved')}>
+              See example builds
+            </button>
+          </div>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 28, marginTop: 44, fontSize: 13, color: BO.textDim, flexWrap: 'wrap' }}>
+              {[
+                { dot: BO.workstation, text: '40,000+ builds' },
+                { dot: BO.content,     text: 'Live pricing' },
+                { dot: BO.general,     text: 'No signup required' },
+              ].map(({ dot, text }) => (
+                <span key={text} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: dot, flexShrink: 0 }} />
+                  {text}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* PC image */}
+        <div style={{
+          position: 'relative',
+          height: isMobile ? 240 : 'clamp(300px,36vw,460px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginTop: isMobile ? 20 : 0,
+        }}>
+          {/* Ambient halos — extend beyond image so the glow feels like it emanates from the page */}
+          <div style={{ position: 'absolute', width: '130%', height: '120%', left: '-15%', top: '-10%', background: 'radial-gradient(ellipse 55% 50% at 50% 48%, rgba(99,102,241,0.5) 0%, rgba(99,102,241,0.18) 42%, transparent 68%)', filter: 'blur(48px)', zIndex: 0 }} />
+          <div style={{ position: 'absolute', width: '100%', height: '70%', left: '0%', top: '30%', background: 'radial-gradient(ellipse 70% 70% at 50% 50%, rgba(139,92,246,0.32), transparent 70%)', filter: 'blur(40px)', zIndex: 0 }} />
+          {/* Side bleeds so the image has no hard edges on left/right */}
+          <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(ellipse 110% 100% at 50% 50%, transparent 45%, ${BO.bg} 85%)`, zIndex: 2, pointerEvents: 'none' }} />
+
+          {!imgErr ? (
+            <img src="assets/pc-hero.png" alt="High-performance PC build"
+              onError={() => setImgErr(true)}
+              style={{
+                width: isMobile ? '92%' : '100%', maxWidth: 540,
+                display: 'block', position: 'relative', zIndex: 1,
+                mixBlendMode: 'screen',
+                /* contrast pushes the dark studio bg toward true black so screen blend erases it;
+                   brightness keeps the lit PC parts vivid */
+                filter: 'contrast(1.35) brightness(1.55) saturate(1.1)',
+                /* mask: dissolve from all edges inward — no hard boundary anywhere */
+                WebkitMaskImage: 'radial-gradient(ellipse 62% 68% at 50% 46%, black 10%, rgba(0,0,0,0.92) 32%, rgba(0,0,0,0.65) 54%, rgba(0,0,0,0.25) 74%, transparent 90%)',
+                maskImage:        'radial-gradient(ellipse 62% 68% at 50% 46%, black 10%, rgba(0,0,0,0.92) 32%, rgba(0,0,0,0.65) 54%, rgba(0,0,0,0.25) 74%, transparent 90%)',
+              }} />
+          ) : (
+            <div style={{
+              position: 'relative', zIndex: 1,
+              width: isMobile ? 180 : 'clamp(180px,28vw,340px)',
+              height: isMobile ? 180 : 'clamp(180px,28vw,340px)',
+              borderRadius: 24,
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.12))',
+              border: `1px solid rgba(99,102,241,0.3)`,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+            }}>
+              <Icon name="cpu" size={isMobile ? 56 : 80} color={BO.primary} strokeWidth={1} />
+              <div style={{ fontFamily: BO.mono, fontSize: 11, color: BO.primary, letterSpacing: 2 }}>PC OPTIMIZER</div>
+            </div>
+          )}
+
+          {/* bottom floor — blends the lowest edge into the page bg */}
+          <div style={{ position: 'absolute', left: '-10%', right: '-10%', bottom: -10, height: 120, background: `linear-gradient(180deg,transparent,${BO.bg} 75%)`, zIndex: 3, pointerEvents: 'none' }} />
+        </div>
+      </div>
+
+      {/* ── Feature cards ── */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        padding: isMobile
+          ? '8px 22px 40px'
+          : 'clamp(24px,3vw,40px) clamp(24px,5.6vw,72px) clamp(40px,5vw,60px)',
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit,minmax(220px,1fr))',
+        gap: isMobile ? 12 : 20,
+        marginTop: isMobile ? 0 : undefined,
+      }}>
+        {[
+          { icon: 'ai',     color: BO.primary,  title: 'AI-Powered Optimization', desc: 'Our algorithm analyzes thousands of combinations to find the best value for your money.' },
+          { icon: 'trophy', color: BO.gaming,   title: 'Best Performance',        desc: 'Get the best performance for your specific use case and budget.' },
+          { icon: 'save',   color: BO.content,  title: 'Save & Compare',          desc: 'Save your builds and compare them side by side to make the best decision.' },
+        ].map((f, i) => (
+          <div key={i} className="bo-card" style={{ padding: isMobile ? '16px' : '26px', display: isMobile ? 'flex' : 'block', gap: isMobile ? 14 : 0, alignItems: isMobile ? 'flex-start' : undefined }}>
+            <div style={{ width: isMobile ? 38 : 44, height: isMobile ? 38 : 44, borderRadius: 10, background: `${f.color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: isMobile ? 0 : 18, flexShrink: 0 }}>
+              <Icon name={f.icon} size={isMobile ? 18 : 22} color={f.color} />
+            </div>
+            <div>
+              <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 700, marginBottom: 4 }}>{f.title}</div>
+              <div style={{ fontSize: isMobile ? 12.5 : 13.5, color: BO.textMuted, lineHeight: 1.55 }}>{f.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// OPTIMIZER
+// ═══════════════════════════════════════════════════════════════════
+const PARTS = [
+  { part: 'CPU',  icon: 'cpu',     name: 'AMD Ryzen 7 7700X',              price: '$299', reason: 'Excellent gaming & productivity performance' },
+  { part: 'GPU',  icon: 'gpu',     name: 'NVIDIA RTX 4070 SUPER',           price: '$599', reason: 'Top pick for 1440p gaming at high refresh' },
+  { part: 'MOBO', icon: 'mobo',    name: 'MSI B650 Tomahawk WiFi',          price: '$189', reason: 'Reliable and feature-rich for the price' },
+  { part: 'RAM',  icon: 'ram',     name: '32GB CORSAIR DDR5 6000MHz',       price: '$109', reason: 'Sweet spot for performance' },
+  { part: 'SSD',  icon: 'storage', name: '1TB WD Black SN850X NVMe',        price: '$89',  reason: 'Fast Gen4 SSD for quick loads' },
+  { part: 'PSU',  icon: 'psu',     name: '750W Corsair RM750x 80+ Gold',    price: '$99',  reason: 'Reliable power for upgrades' },
+  { part: 'CASE', icon: 'case',    name: 'NZXT H5 Flow',                   price: '$89',  reason: 'Great airflow and cable management' },
+  { part: 'COOL', icon: 'cooler',  name: 'Thermalright Peerless Assassin 120', price: '$39', reason: 'Excellent cooling performance' },
+];
+
+const ALLOC = [
+  { k: 'GPU',     v: 39.6, p: '$599', c: BO.gaming },
+  { k: 'CPU',     v: 19.8, p: '$299', c: BO.content },
+  { k: 'MOBO',    v: 12.5, p: '$189', c: BO.workstation },
+  { k: 'RAM',     v: 7.2,  p: '$109', c: BO.general },
+  { k: 'Storage', v: 5.9,  p: '$89',  c: '#f472b6' },
+  { k: 'PSU',     v: 6.5,  p: '$99',  c: '#60a5fa' },
+  { k: 'Case',    v: 5.9,  p: '$89',  c: '#fb7185' },
+  { k: 'Cooler',  v: 2.6,  p: '$39',  c: '#34d399' },
+];
+
+function DonutChart({ size = 180 }) {
+  const total = ALLOC.reduce((a, b) => a + b.v, 0);
+  const r = size / 2 - 16, cx = size / 2, cy = size / 2, ri = r * 0.62;
+  let acc = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Budget allocation donut chart">
+      {ALLOC.map((s, i) => {
+        const a0 = (acc / total) * Math.PI * 2 - Math.PI / 2;
+        acc += s.v;
+        const a1 = (acc / total) * Math.PI * 2 - Math.PI / 2;
+        const lg = a1 - a0 > Math.PI ? 1 : 0;
+        const x1 = cx + r  * Math.cos(a0), y1 = cy + r  * Math.sin(a0);
+        const x2 = cx + r  * Math.cos(a1), y2 = cy + r  * Math.sin(a1);
+        const x3 = cx + ri * Math.cos(a1), y3 = cy + ri * Math.sin(a1);
+        const x4 = cx + ri * Math.cos(a0), y4 = cy + ri * Math.sin(a0);
+        return <path key={i} d={`M ${x1} ${y1} A ${r} ${r} 0 ${lg} 1 ${x2} ${y2} L ${x3} ${y3} A ${ri} ${ri} 0 ${lg} 0 ${x4} ${y4} Z`} fill={s.c} stroke={BO.panel} strokeWidth="2" />;
+      })}
+      <text x={cx} y={cy - 4}  textAnchor="middle" fill={BO.text}    fontSize="20" fontWeight="800" fontFamily={BO.sans}>$1,512</text>
+      <text x={cx} y={cy + 14} textAnchor="middle" fill={BO.textDim} fontSize="11" fontFamily={BO.mono} letterSpacing="1">TOTAL</text>
+    </svg>
+  );
+}
+
+function OptimizerPage({ onNavigate, auth }) {
+  const isMobile = useIsMobile();
+  const [budget, setBudget] = React.useState(1500);
+  const [useCase, setUseCase] = React.useState('Gaming');
+  const [prefs, setPrefs] = React.useState({ future: true, gpu: false, quiet: false });
+
+  const budgetPct = Math.max(0, Math.min(100, (budget - 300) / 47));
+
+  const useCases = [
+    { label: 'Gaming',           key: 'Gaming',      icon: 'play' },
+    { label: 'Content Creation', key: 'Content',     icon: 'gpu' },
+    { label: 'Workstation',      key: 'Workstation', icon: 'cpu' },
+    { label: 'General Use',      key: 'General',     icon: 'mobo' },
+  ];
+
+  const uc = USECASE[useCase];
+
+  const Sidebar = () => (
+    <aside style={{
+      padding: isMobile ? '20px 18px 24px' : '24px',
+      borderRight: isMobile ? 'none' : `1px solid ${BO.borderSoft}`,
+      borderBottom: isMobile ? `1px solid ${BO.borderSoft}` : 'none',
+      overflowY: isMobile ? 'visible' : 'auto',
+      flexShrink: 0,
+      width: isMobile ? '100%' : 360,
+    }}>
+      <div style={{ fontFamily: BO.mono, fontSize: 11, color: BO.textDim, letterSpacing: 1.2, marginBottom: 16, fontWeight: 500 }}>
+        1. YOUR PREFERENCES
+      </div>
+
+      {/* Budget */}
+      <div style={{ marginBottom: 26 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: BO.textMuted }}>Budget</label>
+          <span style={{ fontSize: 15, fontWeight: 700, color: BO.primary }}>${budget.toLocaleString()}</span>
+        </div>
+        <div style={{ position: 'relative', height: 6, background: BO.border, borderRadius: 3, marginBottom: 8, cursor: 'pointer' }}
+          onClick={e => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+            setBudget(Math.round((300 + pct * 4700) / 100) * 100);
+          }}>
+          <div style={{ position: 'absolute', inset: 0, width: `${budgetPct}%`, background: `linear-gradient(90deg,${BO.primary},#8b5cf6)`, borderRadius: 3 }} />
+          <div style={{ position: 'absolute', top: -6, left: `calc(${budgetPct}% - 9px)`, width: 18, height: 18, borderRadius: '50%', background: BO.text, border: `3px solid ${BO.primary}`, boxShadow: '0 2px 8px rgba(99,102,241,0.5)', cursor: 'grab' }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: BO.textDim, marginBottom: 12 }}>
+          <span>$300</span><span>$5,000</span>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: BO.textDim, fontSize: 14, zIndex: 1 }}>$</span>
+          <input className="bo-input" type="number" value={budget} min={300} max={5000}
+            onChange={e => setBudget(Math.max(300, Math.min(5000, Number(e.target.value) || 300)))}
+            style={{ paddingLeft: 24 }} aria-label="Budget amount" />
+        </div>
+      </div>
+
+      {/* Use case */}
+      <div style={{ marginBottom: 26 }}>
+        <label style={{ fontSize: 13, fontWeight: 600, color: BO.textMuted, display: 'block', marginBottom: 12 }}>Use Case</label>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {useCases.map(u => {
+            const active = useCase === u.key;
+            const c = USECASE[u.key];
+            return (
+              <button key={u.key} onClick={() => setUseCase(u.key)} style={{
+                padding: '14px 10px', background: active ? c.bg : BO.bg,
+                border: `1px solid ${active ? c.hue : BO.border}`,
+                borderRadius: 10, color: active ? c.hue : BO.text,
+                fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', transition: 'all .15s',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+              }}>
+                <Icon name={u.icon} size={22} color={active ? c.hue : BO.textMuted} />
+                {u.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Toggles */}
+      <div style={{ marginBottom: 26 }}>
+        <label style={{ fontSize: 13, fontWeight: 600, color: BO.textMuted, display: 'block', marginBottom: 10 }}>Preferences</label>
+        {[
+          { key: 'future', label: 'Prioritize future-proofing' },
+          { key: 'gpu',    label: 'I already own a GPU' },
+          { key: 'quiet',  label: 'Prefer quiet cooling' },
+        ].map((p, i, arr) => (
+          <div key={p.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${BO.borderSoft}` : 'none', fontSize: 13 }}>
+            <span>{p.label}</span>
+            <button className={`bo-toggle ${prefs[p.key] ? 'on' : ''}`}
+              role="switch" aria-checked={prefs[p.key]}
+              aria-label={p.label}
+              onClick={() => setPrefs(x => ({ ...x, [p.key]: !x[p.key] }))} />
+          </div>
+        ))}
+      </div>
+
+      <button className="bo-btn primary" style={{ width: '100%', padding: '14px', fontSize: 15 }}>
+        <Icon name="zap" size={16} color="white" strokeWidth={0} /> Optimize My Build
+      </button>
+    </aside>
+  );
+
+  const MainPanel = () => (
+    <main style={{ padding: isMobile ? '20px 18px 32px' : '28px 36px 36px', overflowY: 'auto', flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontFamily: BO.mono, fontSize: 11, color: BO.textDim, letterSpacing: 1.2, marginBottom: 6, fontWeight: 500 }}>2. RECOMMENDED BUILD</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h2 style={{ fontSize: 22, margin: 0, fontWeight: 700, letterSpacing: -0.3 }}>Your optimized build</h2>
+            <Chip usecase={useCase} />
+          </div>
+          <div style={{ fontSize: 13, color: BO.textMuted, marginTop: 4 }}>
+            Best value for <span style={{ color: BO.text, fontWeight: 600 }}>${budget.toLocaleString()}</span> · updated 2 min ago
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="bo-btn subtle sm"><Icon name="save" size={14} /> Save</button>
+          <button className="bo-btn subtle sm"><Icon name="share" size={14} /> Share</button>
+          <button className="bo-btn subtle sm"><Icon name="download" size={14} /> Export</button>
+        </div>
+      </div>
+
+      {/* Parts list + allocation */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.5fr 1fr', gap: 24 }}>
+        <div>
+          {PARTS.map(p => (
+            <div key={p.part} className="build-row">
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: BO.primarySoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon name={p.icon} size={20} color={BO.primary} />
+              </div>
+              <div style={{ width: 44, fontFamily: BO.mono, fontSize: 11, color: BO.textDim, fontWeight: 600, letterSpacing: 0.5, flexShrink: 0 }}>{p.part}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: BO.textMuted, lineHeight: 1.45 }}>{p.reason}</div>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, minWidth: 70, textAlign: 'right' }}>{p.price}</div>
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', background: 'linear-gradient(90deg,rgba(99,102,241,0.12),rgba(139,92,246,0.08))', border: `1px solid ${BO.primary}`, borderRadius: 10, marginTop: 4 }}>
+            <div>
+              <div style={{ fontFamily: BO.mono, fontSize: 11, color: BO.textDim, letterSpacing: 1, fontWeight: 600 }}>TOTAL</div>
+              <div style={{ fontSize: 13, color: BO.textMuted }}>All components included</div>
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>$1,512</div>
+          </div>
+        </div>
+
+        {/* Budget allocation — hidden on mobile to keep it clean */}
+        {!isMobile && (
+          <div className="bo-card" style={{ padding: 22, alignSelf: 'flex-start' }}>
+            <div style={{ fontFamily: BO.mono, fontSize: 11, color: BO.textDim, letterSpacing: 1.2, marginBottom: 12, fontWeight: 500 }}>3. BUDGET ALLOCATION</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+              <DonutChart />
+            </div>
+            {ALLOC.map(r => (
+              <div key={r.k} style={{ display: 'grid', gridTemplateColumns: '12px 1fr auto auto', gap: 10, alignItems: 'center', padding: '6px 0', fontSize: 12.5 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: r.c }} />
+                <span style={{ color: BO.textMuted }}>{r.k}</span>
+                <span style={{ color: BO.textDim, fontFamily: BO.mono, fontSize: 11 }}>{r.v}%</span>
+                <span style={{ fontWeight: 600, minWidth: 44, textAlign: 'right' }}>{r.p}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 18, padding: 14, background: BO.bg, borderRadius: 8, border: `1px solid ${BO.borderSoft}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="ai" size={14} color={BO.primary} /> WHY THIS BUILD?
+              </div>
+              <div style={{ fontSize: 12.5, color: BO.textMuted, lineHeight: 1.55 }}>
+                Optimized for 1440p {useCase === 'Gaming' ? 'gaming' : useCase.toLowerCase()}. GPU takes priority for high frame rates, with CPU and 32GB RAM ensuring smooth performance and multitasking.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+
+  return (
+    <div className="bo-root page-enter" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <Nav active="optimizer" auth={auth} onNavigate={onNavigate} />
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        flex: 1,
+        overflow: isMobile ? 'visible' : 'hidden',
+        height: isMobile ? 'auto' : 'calc(100vh - 63px)',
+      }}>
+        <Sidebar />
+        <MainPanel />
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SAVED BUILDS
+// ═══════════════════════════════════════════════════════════════════
+const BUILDS = [
+  { name: '1440p Gaming Beast',     date: 'May 12, 2024', price: '$1,532', tag: 'Gaming' },
+  { name: 'Content Creator Pro',    date: 'May 10, 2024', price: '$2,342', tag: 'Content' },
+  { name: 'Budget Gaming Build',    date: 'May 5, 2024',  price: '$842',   tag: 'Gaming' },
+  { name: 'Workstation Powerhouse', date: 'Apr 28, 2024', price: '$3,105', tag: 'Workstation' },
+  { name: 'Future Proof Build',     date: 'Apr 20, 2024', price: '$1,875', tag: 'General' },
+  { name: 'Streaming Setup',        date: 'Apr 15, 2024', price: '$1,245', tag: 'Gaming' },
+];
+const PICONS = ['cpu', 'gpu', 'ram', 'storage', 'mobo', 'psu', 'case'];
+
+function SavedPage({ onNavigate, auth }) {
+  const isMobile = useIsMobile();
+  const [filter, setFilter] = React.useState('All');
+  const [search, setSearch] = React.useState('');
+
+  const visible = BUILDS
+    .filter(b => filter === 'All' || b.tag === filter)
+    .filter(b => !search || b.name.toLowerCase().includes(search.toLowerCase()));
+
+  const counts = { All: 6, Gaming: 3, Content: 1, Workstation: 1, General: 1 };
+
+  return (
+    <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
+      <Nav active="saved" auth={auth} onNavigate={onNavigate} />
+      <div style={{ padding: isMobile ? '22px 18px 48px' : '32px 48px 48px' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <h1 style={{ fontSize: isMobile ? 24 : 32, margin: 0, fontWeight: 800, letterSpacing: -0.8 }}>My Saved Builds</h1>
+            <div style={{ fontSize: 13, color: BO.textMuted, marginTop: 4 }}>6 builds · signed in as kelsey@email.com</div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', zIndex: 1, pointerEvents: 'none' }}>
+                <Icon name="search" size={15} color={BO.textDim} />
+              </div>
+              <input className="bo-input" placeholder="Search builds..." value={search} onChange={e => setSearch(e.target.value)}
+                style={{ paddingLeft: 36, width: isMobile ? '100%' : 240 }} aria-label="Search builds" />
+            </div>
+            <button className="bo-btn subtle"><Icon name="filter" size={14} /> Filter</button>
+            <button className="bo-btn primary" onClick={() => onNavigate('optimizer')}><Icon name="plus" size={14} /> New Build</button>
+          </div>
+        </div>
+
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+          {Object.entries(counts).map(([t, n]) => (
+            <button key={t} className={`filter-pill ${filter === t ? 'active' : ''}`} onClick={() => setFilter(t)}>
+              {t} <span style={{ opacity: 0.7, marginLeft: 4 }}>{n}</span>
+            </button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <button className="bo-btn subtle sm">Sort: Newest <Icon name="chevDn" size={13} /></button>
+        </div>
+
+        {/* Grid */}
+        {visible.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 20 }}>
+            {visible.map((b, i) => (
+              <div key={i} className="bo-card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4, letterSpacing: -0.2 }}>{b.name}</div>
+                    <div style={{ fontSize: 12, color: BO.textDim }}>{b.date}</div>
+                  </div>
+                  <Chip usecase={b.tag} size="sm" />
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>{b.price}</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {PICONS.map((p, j) => (
+                    <div key={j} style={{ width: 34, height: 34, borderRadius: 7, background: BO.bg, border: `1px solid ${BO.borderSoft}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name={p} size={15} color={BO.textMuted} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                  <button className="bo-btn subtle sm" style={{ flex: 1 }}><Icon name="eye" size={13} /> View</button>
+                  <button className="bo-btn primary sm" style={{ flex: 1 }} onClick={() => onNavigate('compare')}><Icon name="compare" size={13} /> Compare</button>
+                  <button className="bo-btn subtle sm danger" style={{ width: 34 }} aria-label="Delete build"><Icon name="trash" size={14} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: BO.textDim }}>
+            <Icon name="search" size={40} color={BO.border} />
+            <div style={{ marginTop: 12, fontSize: 15 }}>No builds match your search</div>
+            <button className="bo-btn ghost sm" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setFilter('All'); }}>Clear filters</button>
+          </div>
+        )}
+
+        {/* Pagination */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 32 }}>
+          <button className="bo-btn subtle icon-sq" aria-label="Previous page"><Icon name="chev" size={14} style={{ transform: 'rotate(180deg)' }} /></button>
+          {[1, 2, 3].map(n => (
+            <button key={n} style={{
+              width: 34, height: 34, borderRadius: 8,
+              background: n === 1 ? BO.primary : BO.panel,
+              border: `1px solid ${n === 1 ? BO.primary : BO.border}`,
+              color: n === 1 ? 'white' : BO.text,
+              fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+            }} aria-label={`Page ${n}`} aria-current={n === 1 ? 'page' : undefined}>{n}</button>
+          ))}
+          <button className="bo-btn subtle icon-sq" aria-label="Next page"><Icon name="chev" size={14} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// COMPARE
+// ═══════════════════════════════════════════════════════════════════
+const BUILD_A = {
+  name: '1440p Gaming Beast', tag: 'Gaming', total: '$1,532',
+  parts: [
+    { p: 'CPU',  n: 'AMD Ryzen 7 7700X',          pr: '$299' },
+    { p: 'GPU',  n: 'NVIDIA RTX 4070 SUPER',        pr: '$599' },
+    { p: 'MOBO', n: 'MSI B650 Tomahawk WiFi',       pr: '$189' },
+    { p: 'RAM',  n: '32GB DDR5 6000MHz',            pr: '$109' },
+    { p: 'SSD',  n: '1TB WD Black SN850X NVMe',     pr: '$89'  },
+    { p: 'PSU',  n: '750W Corsair RM750x Gold',     pr: '$99'  },
+    { p: 'CASE', n: 'NZXT H5 Flow',                pr: '$89'  },
+    { p: 'COOL', n: 'Thermalright Peerless 120',    pr: '$39'  },
+  ],
+};
+const BUILD_B = {
+  name: 'Content Creator Pro', tag: 'Content', total: '$2,342',
+  parts: [
+    { p: 'CPU',  n: 'Intel Core i9-14900K',          pr: '$589', h: true },
+    { p: 'GPU',  n: 'NVIDIA RTX 4080 SUPER',          pr: '$999', h: true },
+    { p: 'MOBO', n: 'ASUS ROG Strix Z790-E WiFi',     pr: '$379', h: true },
+    { p: 'RAM',  n: '64GB DDR5 6400MHz',              pr: '$219', h: true },
+    { p: 'SSD',  n: '2TB Samsung 990 Pro NVMe',       pr: '$179', h: true },
+    { p: 'PSU',  n: '850W Corsair RM850x Gold',       pr: '$139', h: true },
+    { p: 'CASE', n: 'Fractal Design North',           pr: '$159', h: true },
+    { p: 'COOL', n: 'NZXT Kraken 360 Elite',          pr: '$279', h: true },
+  ],
+};
+const PERF = [
+  { l: 'Gaming\n1440p',    a: 85, b: 92 },
+  { l: 'Gaming\n4K',       a: 65, b: 88 },
+  { l: 'Content',          a: 70, b: 95 },
+  { l: 'Productivity',     a: 80, b: 90 },
+  { l: 'Future\nProofing', a: 75, b: 92 },
+];
+
+function ComparePage({ onNavigate, auth }) {
+  const isMobile = useIsMobile();
+
+  const BuildCol = ({ build, highlight }) => (
+    <div className="bo-card" style={{ padding: 20, borderColor: highlight ? BO.primary : BO.border }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.3, marginBottom: 4 }}>{build.name}</div>
+          <Chip usecase={build.tag} size="sm" />
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800 }}>{build.total}</div>
+      </div>
+      {build.parts.map((r, i) => (
+        <div key={i} style={{
+          display: 'grid', gridTemplateColumns: '44px 1fr auto', gap: 12,
+          padding: '11px 10px', borderTop: i === 0 ? 'none' : `1px solid ${BO.borderSoft}`,
+          background: r.h ? 'rgba(99,102,241,0.05)' : 'transparent',
+          borderRadius: 6, alignItems: 'center',
+        }}>
+          <span style={{ fontFamily: BO.mono, fontSize: 10, color: BO.textDim, letterSpacing: 0.5, fontWeight: 600 }}>{r.p}</span>
+          <span style={{ fontSize: 13 }}>{r.n}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: r.h ? BO.primary : BO.text }}>{r.pr}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="bo-root page-enter" style={{ minHeight: '100vh' }}>
+      <Nav active="compare" auth={auth} onNavigate={onNavigate} />
+      <div style={{ padding: isMobile ? '20px 18px 48px' : '24px 48px 48px' }}>
+
+        <button className="bo-btn ghost sm" style={{ marginBottom: 16 }} onClick={() => onNavigate('saved')}>
+          <Icon name="chev" size={13} style={{ transform: 'rotate(180deg)' }} /> Back to Saved Builds
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+          <h1 style={{ fontSize: isMobile ? 22 : 28, margin: 0, fontWeight: 800, letterSpacing: -0.6 }}>Compare Builds</h1>
+          {!isMobile && (
+            <div style={{ display: 'flex', gap: 16, alignItems: 'center', fontSize: 13, flexWrap: 'wrap' }}>
+              <span style={{ color: BO.textMuted }}>Build A</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: BO.panel, border: `1px solid ${BO.border}`, borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                1440p Gaming Beast <Icon name="chevDn" size={12} color={BO.textDim} />
+              </div>
+              <span style={{ color: BO.textMuted }}>Build B</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: BO.panel, border: `1px solid ${BO.border}`, borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>
+                Content Creator Pro <Icon name="chevDn" size={12} color={BO.textDim} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Build columns */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 60px 1fr', gap: 16, alignItems: 'start', marginBottom: 24 }}>
+          <BuildCol build={BUILD_A} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '8px 0' : '60px 0' }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: BO.primarySoft, border: `1px solid ${BO.primary}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: BO.primary, fontSize: 14 }}>VS</div>
+          </div>
+          <BuildCol build={BUILD_B} highlight />
+        </div>
+
+        {/* Charts */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.3fr 1fr', gap: 16, marginBottom: 24 }}>
+
+          {/* Performance bars */}
+          <div className="bo-card" style={{ padding: 22 }}>
+            <div style={{ fontFamily: BO.mono, fontSize: 11, fontWeight: 600, letterSpacing: 0.5, color: BO.textDim, marginBottom: 24 }}>PERFORMANCE SCORE COMPARISON</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', height: 160, justifyContent: 'space-around', padding: '0 4px' }}>
+              {PERF.map((g, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1, height: '100%' }}>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 3, width: '100%', justifyContent: 'center' }}>
+                    <div style={{ width: 20, height: `${g.a}%`, background: `linear-gradient(180deg,${BO.content},${BO.content}99)`, borderRadius: '3px 3px 0 0', position: 'relative' }}>
+                      <div style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700 }}>{g.a}</div>
+                    </div>
+                    <div style={{ width: 20, height: `${g.b}%`, background: `linear-gradient(180deg,${BO.general},#f59e0b)`, borderRadius: '3px 3px 0 0', position: 'relative' }}>
+                      <div style={{ position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)', fontSize: 10, fontWeight: 700 }}>{g.b}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10, color: BO.textMuted, textAlign: 'center', lineHeight: 1.25, whiteSpace: 'pre-line' }}>{g.l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 20, paddingTop: 14, borderTop: `1px solid ${BO.borderSoft}`, fontSize: 12, justifyContent: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: BO.content }} /> Build A — {BUILD_A.name}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: BO.general }} /> Build B — {BUILD_B.name}</span>
+            </div>
+          </div>
+
+          {/* Donut comparison */}
+          <div className="bo-card" style={{ padding: 22 }}>
+            <div style={{ fontFamily: BO.mono, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: BO.text, marginBottom: 18 }}>BUDGET ALLOCATION COMPARISON</div>
+            <div style={{ display: 'flex', gap: 16, justifyContent: 'center', alignItems: 'center' }}>
+              <div style={{ textAlign: 'center' }}>
+                <DonutChart size={130} />
+                <div style={{ fontSize: 12, color: BO.textMuted, marginTop: 8 }}>Build A</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <DonutChart size={130} />
+                <div style={{ fontSize: 12, color: BO.textMuted, marginTop: 8 }}>Build B</div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginTop: 16, fontSize: 11 }}>
+              {[['GPU',BO.gaming],['CPU',BO.content],['MOBO',BO.workstation],['RAM',BO.general],['Storage','#f472b6'],['PSU','#60a5fa'],['Case','#fb7185'],['Cooler','#34d399']].map(([l,c]) => (
+                <span key={l} style={{ display: 'flex', alignItems: 'center', gap: 5, color: BO.textMuted }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} /> {l}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button className="bo-btn subtle"><Icon name="save" size={14} /> Save Build</button>
+          <button className="bo-btn primary"><Icon name="compare" size={14} /> Compare Another</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════════
+function AuthPage({ mode, onNavigate, onSuccess }) {
+  const isMobile = useIsMobile();
+  const isLogin = mode === 'login';
+  const [email, setEmail] = React.useState('');
+  const [pass, setPass] = React.useState('');
+  const [name, setName] = React.useState('');
+
+  const handleSubmit = (e) => { e.preventDefault(); onSuccess(); };
+
+  return (
+    <div className="bo-root page-enter" style={{ position: 'relative', overflow: 'hidden', minHeight: '100vh' }}>
+      <Nav onNavigate={onNavigate} />
+      <div className="bo-glow" style={{ opacity: 0.7 }} />
+      <div style={{
+        position: 'relative', zIndex: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minHeight: 'calc(100vh - 63px)', padding: isMobile ? '24px 20px' : 40,
+      }}>
+        <div className="bo-card" style={{ width: '100%', maxWidth: 420, padding: isMobile ? '28px 22px' : 36 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            <Logomark />
+            <span style={{ fontSize: 17, fontWeight: 700 }}>MPOptima</span>
+          </div>
+          <h2 style={{ fontSize: 24, margin: 0, fontWeight: 800, letterSpacing: -0.5 }}>
+            {isLogin ? 'Welcome back!' : 'Create your account'}
+          </h2>
+          <p style={{ fontSize: 14, color: BO.textMuted, marginTop: 6, marginBottom: 26 }}>
+            {isLogin ? 'Log in to access your saved builds.' : 'Sign up to save and compare your builds.'}
+          </p>
+
+          <form onSubmit={handleSubmit}>
+            {!isLogin && (
+              <div style={{ marginBottom: 16 }}>
+                <label htmlFor="auth-name" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Full Name</label>
+                <input id="auth-name" className="bo-input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} autoComplete="name" />
+              </div>
+            )}
+            <div style={{ marginBottom: 16 }}>
+              <label htmlFor="auth-email" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Email</label>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', zIndex: 1, pointerEvents: 'none' }}>
+                  <Icon name="mail" size={15} color={BO.textDim} />
+                </div>
+                <input id="auth-email" className="bo-input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} style={{ paddingLeft: 40 }} autoComplete="email" />
+              </div>
+            </div>
+            <div style={{ marginBottom: isLogin ? 8 : 18 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <label htmlFor="auth-pass" style={{ fontSize: 13, fontWeight: 600 }}>Password</label>
+                {isLogin && <a style={{ fontSize: 12, color: BO.primary, fontWeight: 600, cursor: 'pointer' }}>Forgot password?</a>}
+              </div>
+              <div style={{ position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', zIndex: 1, pointerEvents: 'none' }}>
+                  <Icon name="lock" size={15} color={BO.textDim} />
+                </div>
+                <input id="auth-pass" className="bo-input" type="password" placeholder="••••••••" value={pass} onChange={e => setPass(e.target.value)} style={{ paddingLeft: 40 }} autoComplete={isLogin ? 'current-password' : 'new-password'} />
+              </div>
+              {!isLogin && <div style={{ fontSize: 11, color: BO.textDim, marginTop: 6 }}>At least 8 characters with a number.</div>}
+            </div>
+
+            {isLogin && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: BO.textMuted, marginBottom: 20, cursor: 'pointer' }}>
+                <span style={{ width: 16, height: 16, borderRadius: 4, border: `1px solid ${BO.border}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: BO.bg, flexShrink: 0 }} />
+                Remember me for 30 days
+              </label>
+            )}
+
+            <button type="submit" className="bo-btn primary" style={{ width: '100%', padding: '12px', fontSize: 15 }}>
+              {isLogin ? 'Log in' : 'Sign Up'}
+            </button>
+          </form>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 0', fontSize: 12, color: BO.textDim }}>
+            <div style={{ flex: 1, height: 1, background: BO.borderSoft }} />
+            <span>or continue with</span>
+            <div style={{ flex: 1, height: 1, background: BO.borderSoft }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="bo-btn subtle" style={{ flex: 1 }}>Google</button>
+            <button className="bo-btn subtle" style={{ flex: 1 }}>Apple</button>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: BO.textMuted }}>
+            {isLogin ? "Don't have an account? " : 'Already have an account? '}
+            <a style={{ color: BO.primary, fontWeight: 600, cursor: 'pointer' }} onClick={() => onNavigate(isLogin ? 'signup' : 'login')}>
+              {isLogin ? 'Sign up' : 'Log in'}
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// APP ROUTER
+// ═══════════════════════════════════════════════════════════════════
+function App() {
+  const [screen, setScreen] = React.useState('landing');
+  const [auth, setAuth] = React.useState('out');
+
+  const navigate = React.useCallback((s) => {
+    setScreen(s);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleAuthSuccess = React.useCallback(() => {
+    setAuth('in');
+    navigate('optimizer');
+  }, [navigate]);
+
+  const props = { onNavigate: navigate, auth };
+
+  return (
+    <React.Fragment key={screen}>
+      {screen === 'landing'   && <LandingPage   {...props} />}
+      {screen === 'optimizer' && <OptimizerPage {...props} />}
+      {screen === 'saved'     && <SavedPage     {...props} />}
+      {screen === 'compare'   && <ComparePage   {...props} />}
+      {screen === 'login'     && <AuthPage mode="login"  onNavigate={navigate} onSuccess={handleAuthSuccess} />}
+      {screen === 'signup'    && <AuthPage mode="signup" onNavigate={navigate} onSuccess={handleAuthSuccess} />}
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
